@@ -1,0 +1,65 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MELI_API_URL=${MELI_API_URL:-https://api.mercadolibre.com}
+      # Single node defaults
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=${REDIS_DB:-0}
+      # Cluster (opcional): si se setea, la app usa cluster
+      - REDIS_CLUSTER_NODES=${REDIS_CLUSTER_NODES:-}
+    ports:
+      - "${API_PORT:-8080}:8000"
+    command: uvicorn app.fast_api:app --host 0.0.0.0 --port 8000
+
+  # Redis single node (perfil: single)
+  redis:
+    image: redis:7-alpine
+    profiles: ["single"]
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "no"]
+
+  # Redis Cluster (perfil: cluster)
+  redis-cluster:
+    image: bitnami/redis-cluster:7.2
+    profiles: ["cluster"]
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_CLUSTER_REPLICAS=1
+      - REDIS_NODES=6
+    ports:
+      - "7000-7005:7000-7005"
+
+  # Exporter de Redis para Prometheus (perfil: cluster)
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.64.0
+    profiles: ["cluster"]
+    environment:
+      - REDIS_ADDR=redis://redis-cluster:7000
+    ports:
+      - "9121:9121"
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+
+volumes: {}

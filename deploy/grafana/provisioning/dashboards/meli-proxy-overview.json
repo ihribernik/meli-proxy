@@ -1,0 +1,47 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Requests/s",
+      "datasource": "Prometheus",
+      "targets": [{
+        "expr": "sum(rate(http_requests_total[1m]))",
+        "legendFormat": "req/s"
+      }],
+      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0}
+    },
+    {
+      "type": "stat",
+      "title": "Latency P95",
+      "datasource": "Prometheus",
+      "targets": [{
+        "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+        "legendFormat": "p95"
+      }],
+      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0}
+    },
+    {
+      "type": "stat",
+      "title": "Rate Limit Blocks/s",
+      "datasource": "Prometheus",
+      "targets": [{
+        "expr": "sum(rate(meli_proxy_rate_limit_blocked_total[1m]))",
+        "legendFormat": "blocks/s"
+      }],
+      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0}
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["meli", "proxy"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "",
+  "title": "Meli Proxy Overview",
+  "uid": "meli-proxy-overview",
+  "version": 1
+}
