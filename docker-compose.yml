@@ -16,7 +16,21 @@ services:
       - REDIS_CLUSTER_NODES=${REDIS_CLUSTER_NODES:-}
     ports:
       - "${API_PORT:-8080}:8000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.meli.rule=PathPrefix(`/`)"
+      - "traefik.http.routers.meli.entrypoints=web"
+      - "traefik.http.services.meli.loadbalancer.server.port=8000"
     command: uvicorn app.fast_api:app --host 0.0.0.0 --port 8000
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c ''import sys,urllib.request; urllib.request.urlopen("http://127.0.0.1:8000/metrics", timeout=3); sys.exit(0)'' || exit 1',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # Redis single node (perfil: single)
   redis:
@@ -25,6 +39,11 @@ services:
     ports:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # Redis Cluster (perfil: cluster)
   redis-cluster:
@@ -36,6 +55,11 @@ services:
       - REDIS_NODES=6
     ports:
       - "7000-7005:7000-7005"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -p 7000 ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
   # Exporter de Redis para Prometheus (perfil: cluster)
   redis-exporter:
@@ -61,5 +85,16 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+
+  traefik:
+    image: traefik:v3.1
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes: {}

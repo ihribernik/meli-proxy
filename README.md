@@ -85,3 +85,7 @@ Grafana: http://localhost:3000 (admin/admin)
 Escalar réplicas de la API:
 - docker compose --profile single up -d --scale api=3
 - docker compose --profile cluster up -d --scale api=3
+
+### Inicialización de Redis (Backoff)
+- `REDIS_INIT_RETRIES` (default: 30): reintentos de ping al iniciar
+- `REDIS_INIT_BACKOFF` (default: 0.5): backoff inicial en segundos (exponencial con jitter)

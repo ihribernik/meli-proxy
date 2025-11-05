@@ -1,3 +1,4 @@
+from collections.abc import Awaitable
 from typing import Dict
 
 from fastapi import APIRouter
@@ -13,7 +14,13 @@ async def health_check() -> Dict[str, Dict[str, str] | str]:
     redis_status = "connected"
     try:
         r = await get_redis()
-        pong = await r.ping()
+        ping_result: bool | Awaitable[bool] = r.ping()
+        pong = (
+            await ping_result
+            if isinstance(ping_result, Awaitable)
+            else bool(ping_result)
+        )
+
         if not pong:
             status = "unhealthy"
             redis_status = "no_pong"

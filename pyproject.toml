@@ -5,48 +5,22 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "alembic>=1.16.5",
+    "dependency-injector==4.41.0",
     "fastapi[standard]>=0.116.1",
-    "uvicorn>=0.35.0",
-    "python-dotenv>=1.0.0",
-    "pydantic>=2.4.2",
-    "pydantic-settings>=2.10.1",
     "httpx>=0.27.2",
-    "redis[hiredis]>=5.0.8",
+    "passlib[bcrypt]>=1.7.4",
+    "pre-commit>=4.3.0",
     "prometheus-client>=0.20.0",
     "prometheus-fastapi-instrumentator>=7.0.0",
-]>=0.116.1",
-    "uvicorn>=0.35.0",
-    "python-dotenv>=1.0.0",
-    "pydantic>=2.4.2",
-    "pydantic-settings>=2.10.1",
-    "httpx>=0.27.2",
-    "redis[hiredis]>=5.0.8",
-]>=0.116.1",
-    "sqlalchemy>=2.0.43",
-    "uvicorn>=0.35.0",
-    "python-dotenv>=1.0.0",
-    "pydantic>=2.4.2",
     "psycopg2-binary>=2.9.6",
     "pydantic-settings>=2.10.1",
+    "pydantic>=2.4.2",
+    "python-dotenv>=1.0.0",
     "python-jose[cryptography]>=3.5.0",
-    "passlib[bcrypt]>=1.7.4",
-    "pre-commit>=4.3.0",
-    "alembic>=1.16.5",
-    "dependency-injector==4.41.0",
-    "httpx>=0.27.2",
     "redis[hiredis]>=5.0.8",
-]>=0.116.1",
     "sqlalchemy>=2.0.43",
     "uvicorn>=0.35.0",
-    "python-dotenv>=1.0.0",
-    "pydantic>=2.4.2",
-    "psycopg2-binary>=2.9.6",
-    "pydantic-settings>=2.10.1",
-    "python-jose[cryptography]>=3.5.0",
-    "passlib[bcrypt]>=1.7.4",
-    "pre-commit>=4.3.0",
-    "alembic>=1.16.5",
-    "dependency-injector==4.41.0",
 ]
 
 [dependency-groups]
@@ -106,11 +80,16 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 minversion = "8.4"
-addopts = "-ra -q --strict-markers"
+addopts = "-ra --strict-markers --cov=app --cov-report=term-missing:skip-covered --cov-report=xml:coverage.xml --cov-fail-under=60"
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 
+[tool.coverage.run]
+branch = true
+source = ["app"]
 
-
+[tool.coverage.report]
+show_missing = true
+skip_covered = true

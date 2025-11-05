@@ -1,115 +1,61 @@
 # Architecture Meli-Proxy
 
-## Descripción del Proyecto
+## Resumen
+Proxy HTTP de alto rendimiento (FastAPI) hacia `https://api.mercadolibre.com`, con limitación de tasa distribuida en Redis (single o Cluster), métricas Prometheus y balanceo con Traefik.
 
-Este proyecto es una versión optimizada en Python del proxy de Mercado Libre, desarrollada con FastAPI. Está diseñada para manejar **50,000+ requests por segundo**.
-
-### Características Principales
-
-- **Alto Rendimiento**: Arquitectura asíncrona con async/await
-- **Escalabilidad Horizontal**: Diseñado para múltiples instancias
-- **Rate Limiting Inteligente**: Por IP y por IP+path con autenticación
-- **Caché Optimizado**: Redis con TTL configurable
-- **Monitoreo**: Estadísticas detalladas de requests
-- **Autenticación**: JWT tokens y API keys
-- **Docker Ready**: Containerizado para despliegue fácil
-
-### arquitectura
-
+## Diagrama (alto nivel)
+```mermaid
+flowchart LR
+    C[Cliente] -->|HTTP| T[Traefik]
+    subgraph Compose/K8s Cluster
+      direction LR
+      T --> A1[API Replica 1]
+      T --> A2[API Replica 2]
+      T --> A3[API Replica 3]
+      subgraph Redis
+        direction TB
+        RC1[(Master 1)] --- RR1[(Replica 1)]
+        RC2[(Master 2)] --- RR2[(Replica 2)]
+        RC3[(Master 3)] --- RR3[(Replica 3)]
+      end
+    end
+    A1 <-->|async| R[(Redis / Redis Cluster)]
+    A2 <-->|async| R
+    A3 <-->|async| R
+    A1 -->|HTTP| U[(api.mercadolibre.com)]
+    A2 -->|HTTP| U
+    A3 -->|HTTP| U
 ```
 
-```
+## Flujo de Request
+1. Traefik recibe el request y balancea a una réplica de la API.
+2. Middleware de Rate Limit consulta/incrementa contadores en Redis por ventana de 60s (IP, Path, IP+Path).
+3. Si excede límite → 429 con headers `Retry-After`, `X-RateLimit-*`.
+4. Si pasa, el proxy reenvía hacia `api.mercadolibre.com` usando un `httpx.AsyncClient` compartido.
+5. La respuesta se devuelve al cliente con headers filtrados.
+6. Métricas: `/metrics` expone Prometheus (latencias/requests), y contadores de rate-limit (allowed/blocked).
 
-### Variables de Entorno (.env)
+## Componentes
+- FastAPI App: `app/fast_api.py`
+  - CORS, middleware de rate limit, rutas `/health`, `/metrics`, y proxy catch‑all.
+- Proxy: `app/presentation/proxy.py`
+  - Cliente `httpx` global con pool/keepalive para alto throughput.
+- Rate Limit: `app/presentation/api/middlewares/rate_limit.py`
+  - Claves por ventana: `rl:ip:{ip}:{window}`, `rl:path:{prefix}:{window}`, `rl:ippath:{ip}:{prefix}:{window}`.
+  - Headers: `X-RateLimit-Limit/Remaining/Reset`.
+  - Métricas: `meli_proxy_rate_limit_allowed_total`, `meli_proxy_rate_limit_blocked_total`.
+- Redis Client: `app/infrastructure/redis_client.py`
+  - Single o Cluster (auto por `REDIS_CLUSTER_NODES`), readiness con backoff.
+- Observabilidad: Prometheus + Grafana (compose `deploy/*`).
+- Balanceo: Traefik (compose) con labels en `api`.
 
-```env
-# Servidor
-HOST=0.0.0.0
-PORT=8900
+## Variables relevantes
+- `MELI_API_URL` (default: `https://api.mercadolibre.com`)
+- Redis single: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
+- Redis cluster: `REDIS_CLUSTER_NODES` (lista host:port)
+- Backoff Redis: `REDIS_INIT_RETRIES`, `REDIS_INIT_BACKOFF`
+- Rate limit JSON: `RATE_LIMIT_RULES_IP_JSON`, `RATE_LIMIT_RULES_PATH_JSON`, `RATE_LIMIT_RULES_IP_PATH_JSON`
 
-# API de Mercado Libre
-MELI_API_URL=https://api.mercadolibre.com
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-REDIS_DB=0
-
-# Rate Limiting
-RATE_LIMIT_GENERAL=5
-RATE_LIMIT_PATH=3
-RATE_LIMIT_AUTH=1000
-RATE_LIMIT_AUTH_PATH=1000
-
-# Seguridad
-APP_KEY=very-hard-app-key
-APP_ID=very-hard-app-id
-JWT_TOKEN=jwt-token-validation
-
-# Caché
-CACHE_TTL_SECONDS=3600
-```
-
-### Autenticación
-
-El sistema soporta dos métodos de autenticación:
-
-1. **API Keys**: Headers `app-key` y `app-id`
-2. **JWT Token**: Header `Authorization: Bearer <token>`
-
-Los usuarios autenticados tienen límites de rate limiting más altos.
-
-### 🏛️ Arquitectura Técnica
-
-#### Componentes Principales
-
-##### 1. FastAPI Application (main.py)
-
-- Punto de entrada principal
-- Configuración de rutas y middleware
-- Manejo de CORS y eventos de ciclo de vida
-
-##### 2. Rate Limiting Middleware (middleware/rate_limit.py)
-
-- Controla límites por IP y por IP+path
-- Cache local para reducir hits a Redis
-- Diferenciación entre usuarios autenticados y no autenticados
-
-##### 3. Servicios de Negocio
-
-**MeliService (services/meli_service.py):**
-
-- Proxy a la API de Mercado Libre
-- Gestión de caché Redis
-- Manejo de diferentes métodos HTTP
-
-**StatisticsService (services/statistics_service.py):**
-
-- Registro de métricas de requests
-- Almacenamiento en Redis con TTL
-
-##### 4. Repositorio Redis (repositories/redis_repo.py)
-
-- Operaciones asíncronas con Redis
-- Gestión de caché y contadores
-- Manejo de expiración automática
-
-##### 5. Modelos de Datos (models/)
-
-- **ApiResponse**: Estructura de respuesta de la API
-- **Statistics**: Métricas de requests
-- **Tracking**: Seguimiento de rate limiting
-
-#### Flujo de Request
-
-```text
-1. Request llega → Rate Limiting Middleware
-2. Verificación de límites → Redis/Local Cache
-3. Si válido → MeliService
-4. Check Cache → Redis
-5. Si no cacheado → Request a Meli API
-6. Cache response → Redis
-7. Log statistics → Redis
-8. Return response
-```
+## Perfiles/Despliegue
+- Compose perfiles: `single` y `cluster` (ver README)
+- Escalado: `--scale api=3` (Traefik balancea), o K8s con Deployment + Service + HPA.

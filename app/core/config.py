@@ -22,7 +22,6 @@ class Settings(BaseSettings):
     # Upstream (Mercado Libre API)
     MELI_API_URL: str = "https://api.mercadolibre.com"
 
-    # Backwards compatibility with existing proxy code
     @property
     def PROXY_UPSTREAM_BASE(self) -> str:
         return self.MELI_API_URL
@@ -37,6 +36,10 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     # Comma-separated list of host:port for cluster; when set, cluster mode is used
     REDIS_CLUSTER_NODES: str | None = None
+
+    # Redis init backoff
+    REDIS_INIT_RETRIES: int = 30
+    REDIS_INIT_BACKOFF: float = 0.5
 
     # Rate limiting defaults (per minute)
     RATE_LIMIT_DEFAULT: int = 0  # 0 = unlimited if no rule matches
@@ -81,7 +84,9 @@ class Settings(BaseSettings):
                         prefix = str(item.get("path_prefix", ""))
                         limit = int(item.get("limit", 0))
                         if ip and prefix and limit > 0:
-                            out.append({"ip": ip, "path_prefix": prefix, "limit": limit})
+                            out.append(
+                                {"ip": ip, "path_prefix": prefix, "limit": limit}
+                            )
                     if out:
                         return out
             except Exception:

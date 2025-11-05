@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import Optional, Sequence
+from typing import Sequence
 
 import redis.asyncio as redis
 
@@ -28,7 +28,9 @@ def _parse_cluster_nodes(nodes: str) -> Sequence[tuple[str, int]]:
     return parsed
 
 
-async def _wait_ready(client: redis.Redis, retries: int = 30, base_backoff: float = 0.5) -> None:
+async def _wait_ready(
+    client: redis.Redis | redis.RedisCluster, retries: int, base_backoff: float
+) -> None:
     """Wait until Redis/Cluster answers ping with exponential backoff."""
     attempt = 0
     while True:
@@ -47,7 +49,7 @@ async def _wait_ready(client: redis.Redis, retries: int = 30, base_backoff: floa
         await asyncio.sleep(max(0.1, sleep + jitter))
 
 
-async def get_redis() -> redis.Redis:
+async def get_redis() -> redis.Redis | redis.RedisCluster:
     global _redis_client
     if _redis_client is not None:
         return _redis_client
@@ -60,7 +62,7 @@ async def get_redis() -> redis.Redis:
             password=settings.REDIS_PASSWORD,
             decode_responses=False,
             read_from_replicas=True,
-            skip_full_coverage_check=True,
+            # skip_full_coverage_check=True,
         )
     else:
         _redis_client = redis.Redis(
@@ -71,5 +73,7 @@ async def get_redis() -> redis.Redis:
             decode_responses=False,
         )
 
-    await _wait_ready(_redis_client)
+    await _wait_ready(
+        _redis_client, settings.REDIS_INIT_RETRIES, settings.REDIS_INIT_BACKOFF
+    )
     return _redis_client

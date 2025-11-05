@@ -4,11 +4,11 @@ import time
 from typing import Callable, Dict, List, Optional, Tuple
 
 from fastapi import Request, Response
+from prometheus_client import Counter
 from starlette.responses import JSONResponse
 
 from app.core.config import Settings
 from app.infrastructure.redis_client import get_redis
-from prometheus_client import Counter
 
 RATE_LIMIT_ALLOWED = Counter(
     "meli_proxy_rate_limit_allowed_total",
@@ -57,7 +57,9 @@ class RedisRateLimiter:
     def _key(scope: str, ident: str, window_id: int) -> str:
         return f"rl:{scope}:{ident}:{window_id}"
 
-    async def check_and_increment(self, client_ip: str, path: str) -> Tuple[bool, Optional[Tuple[str, str, int]], int, int]:
+    async def check_and_increment(
+        self, client_ip: str, path: str
+    ) -> Tuple[bool, Optional[Tuple[str, str, int]], int, int]:
         window_id = self._window_id()
         rules = self._match_rules(client_ip, path)
         if not rules:
@@ -84,7 +86,9 @@ class RedisRateLimiter:
         def spec_weight(scope: str) -> int:
             return 0 if scope == "ippath" else (1 if scope == "path" else 2)
 
-        most_specific_idx = sorted(range(len(rules)), key=lambda i: spec_weight(rules[i][0]))[0]
+        most_specific_idx = sorted(
+            range(len(rules)), key=lambda i: spec_weight(rules[i][0])
+        )[0]
         limit = limits[most_specific_idx]
         current = counts[most_specific_idx]
         remaining = max(0, limit - current)
@@ -108,7 +112,9 @@ async def rate_limit_middleware(request: Request, call_next: Callable) -> Respon
     )
     path = request.url.path
 
-    allowed, rule, remaining, reset_in = await limiter.check_and_increment(client_ip, path)
+    allowed, rule, remaining, reset_in = await limiter.check_and_increment(
+        client_ip, path
+    )
     if not allowed and rule is not None:
         scope, ident, limit = rule
         RATE_LIMIT_BLOCKED.labels(scope=scope).inc()

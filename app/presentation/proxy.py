@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Iterable, Dict
+from typing import Dict, Iterable
 
 import httpx
 from fastapi import APIRouter, Request, Response
 
 from app.core.config import Settings
-
 
 router = APIRouter()
 
@@ -53,7 +52,10 @@ def _get_client() -> httpx.AsyncClient:
     return _client
 
 
-@router.api_route("/{full_path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])
+@router.api_route(
+    "/{full_path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+)
 async def proxy_all(full_path: str, request: Request) -> Response:
     settings = Settings()
     upstream_base = settings.PROXY_UPSTREAM_BASE.rstrip("/")
