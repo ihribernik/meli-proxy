@@ -64,6 +64,34 @@ async def proxy_all(full_path: str, request: Request) -> Response:
 
     method = request.method
     headers = _filter_headers(request.headers.items())
+    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+        request.client.host if request.client else ""
+    )
+    if client_ip:
+        existing_chain = request.headers.get("x-forwarded-for", "")
+        chain_parts = [
+            part.strip()
+            for part in existing_chain.split(",")
+            if part and part.strip()
+        ]
+        if not chain_parts or chain_parts[-1] != client_ip:
+            chain_parts.append(client_ip)
+        if chain_parts:
+            for key in list(headers.keys()):
+                if key.lower() == "x-forwarded-for":
+                    headers.pop(key)
+            headers["X-Forwarded-For"] = ", ".join(chain_parts)
+
+    if request.headers.get("host") and not any(
+        key.lower() == "x-forwarded-host" for key in headers
+    ):
+        headers["X-Forwarded-Host"] = request.headers["host"]
+
+    if request.url.scheme and not any(
+        key.lower() == "x-forwarded-proto" for key in headers
+    ):
+        headers["X-Forwarded-Proto"] = request.url.scheme
+
     body = await request.body()
 
     client = _get_client()

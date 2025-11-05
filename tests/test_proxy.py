@@ -16,8 +16,13 @@ class DummyUpstreamResp:
 class DummyClient:
     def __init__(self, response: DummyUpstreamResp):
         self._resp = response
+        self.captured_request: dict[str, object] = {}
 
     async def request(self, *args: tuple, **kwargs: dict) -> DummyUpstreamResp:
+        if args:
+            self.captured_request["args"] = args
+        if kwargs:
+            self.captured_request["kwargs"] = kwargs
         return self._resp
 
 
@@ -45,9 +50,8 @@ class ProxyTest(unittest.TestCase):
         dummy_resp = DummyUpstreamResp(
             b'{"ok":true}', 200, {"content-type": "application/json"}
         )
-        self.monkeypatch.setattr(
-            proxy_module, "_client", DummyClient(dummy_resp), raising=True
-        )
+        dummy_client = DummyClient(dummy_resp)
+        self.monkeypatch.setattr(proxy_module, "_client", dummy_client, raising=True)
 
         # Stub rate limiter to avoid Redis
         from app.presentation.api.middlewares import rate_limit as rl
@@ -59,8 +63,12 @@ class ProxyTest(unittest.TestCase):
         client = TestClient(fast_api.app)
         r = client.get("/categories/MLA97994?foo=bar")
         self.assertEqual(r.status_code, 200)
-        assert r.headers["content-type"].startswith("application/json")
-        assert r.text == '{"ok":true}'
+        self.assertEqual(r.headers["content-type"], "application/json")
+        self.assertEqual(r.text, '{"ok":true}')
+        captured_headers = dummy_client.captured_request["kwargs"]["headers"]
+        self.assertIn("X-Forwarded-For", captured_headers)
+        self.assertIn("X-Forwarded-Host", captured_headers)
+        self.assertIn("X-Forwarded-Proto", captured_headers)
 
 
 class TestProxyLazyClient(unittest.TestCase):

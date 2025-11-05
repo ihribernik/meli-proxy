@@ -43,11 +43,15 @@ class Settings(BaseSettings):
 
     # Rate limiting defaults (per minute)
     RATE_LIMIT_DEFAULT: int = 0  # 0 = unlimited if no rule matches
+    RATE_LIMIT_CACHE_SECONDS: float = 5.0
 
     # Rules configured via JSON envs for flexibility
     RATE_LIMIT_RULES_IP_JSON: str | None = None
     RATE_LIMIT_RULES_PATH_JSON: str | None = None
     RATE_LIMIT_RULES_IP_PATH_JSON: str | None = None
+
+    # Admin API
+    ADMIN_API_TOKENS: str | None = None
 
     # Sensible defaults matching the challenge examples
     @property
@@ -92,3 +96,14 @@ class Settings(BaseSettings):
             except Exception:
                 pass
         return [{"ip": "152.152.152.152", "path_prefix": "/items/", "limit": 10}]
+
+    @property
+    def ADMIN_API_KEYS(self) -> List[str]:
+        if not self.ADMIN_API_TOKENS:
+            return []
+        tokens = [
+            token.strip()
+            for token in self.ADMIN_API_TOKENS.split(",")
+            if token and token.strip()
+        ]
+        return tokens
