@@ -3,6 +3,7 @@
 Proxy de alto rendimiento para la API de Mercado Libre, con rate limit distribuido en Redis y métricas Prometheus listas para Grafana.
 
 ## Características
+
 - Proxy transparente a `https://api.mercadolibre.com` (sin redirect ni cache)
 - Rate limiting por IP, por path y por IP+path en Redis/Redis Cluster
 - Métricas Prometheus en `/metrics` (latencia, throughput, rate-limit)
@@ -34,17 +35,41 @@ RATE_LIMIT_RULES_IP_PATH_JSON=[{"ip":"152.152.152.152","path_prefix":"/items/","
 ## Ejecutar local
 
 ```bash
-# Python
-pip install -e .
+# Crear entorno virtual y activar
+python -m venv .venv
+# Linux/macOS
+source .venv/bin/activate
+# Windows PowerShell
+.venv\\Scripts\\Activate.ps1
+
+# Instalar dependencias (dev)
+pip install -r requirements-dev.txt
+
+# Levantar la API
 uvicorn app.fast_api:app --host 0.0.0.0 --port 8000
 
-# Probar
-curl http://127.0.0.1:8080/categories/MLA97994     # via Docker (ver compose)
+# Probar local
+curl http://127.0.0.1:8000/health
+
+# Probar vía Docker (mapea 8080->8000)
+curl http://127.0.0.1:8080/categories/MLA97994
+```
+
+## Tests
+
+```bash
+# Opción simple
+pytest
+
+# Con tox (aislado por intérprete)
+pip install tox
+tox -e py311
 ```
 
 ## Docker Compose (Dev)
 
 Servicios incluidos:
+
 - `api`: FastAPI + /metrics
 - `redis`: Redis 7 single node
 - `prometheus`: scrape `/metrics` de `api`
@@ -56,20 +81,23 @@ docker compose up --build -d
 docker compose up -d --scale api=3
 ```
 
-Prometheus: http://localhost:9090
-Grafana: http://localhost:3000 (admin/admin)
+Prometheus: [localhost:9090](http://localhost:9090)
+Grafana: [localhost:3000](http://localhost:3000) (admin/admin)
 
 ## Endpoints
+
 - `/health`: verifica conexión a Redis
 - `/metrics`: métricas Prometheus
 - `/*`: proxy a Mercado Libre (métodos GET/POST/PUT/PATCH/DELETE/HEAD/OPTIONS)
 
 ## Métricas expuestas
+
 - Requests/latencias (instrumentación automática)
 - `meli_proxy_rate_limit_allowed_total{scope}`
 - `meli_proxy_rate_limit_blocked_total{scope}`
 
 ## Notas de rendimiento
+
 - Use `--workers` en Uvicorn/Gunicorn para más CPU.
 - Escale con `--scale api=N` y ponga un balanceador al frente.
 - Redis Cluster recomendado en producción para sharding y disponibilidad.
@@ -83,9 +111,11 @@ Grafana: http://localhost:3000 (admin/admin)
   - docker compose --profile cluster up --build -d
 
 Escalar réplicas de la API:
+
 - docker compose --profile single up -d --scale api=3
 - docker compose --profile cluster up -d --scale api=3
 
 ### Inicialización de Redis (Backoff)
+
 - `REDIS_INIT_RETRIES` (default: 30): reintentos de ping al iniciar
 - `REDIS_INIT_BACKOFF` (default: 0.5): backoff inicial en segundos (exponencial con jitter)

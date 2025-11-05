@@ -55,6 +55,7 @@ def _get_client() -> httpx.AsyncClient:
 @router.api_route(
     "/{full_path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
+    tags=["proxy"],
 )
 async def proxy_all(full_path: str, request: Request) -> Response:
     settings = Settings()

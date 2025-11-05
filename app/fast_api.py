@@ -36,13 +36,13 @@ def create_app() -> FastAPI:
     # Health and other small routes
     register_routes(app, prefix="")
 
-    # Proxy all other paths to Mercado Libre
-    app.include_router(proxy_router, prefix="")
-
-    # Prometheus metrics at /metrics
+    # Prometheus metrics at /metrics (place before proxy)
     Instrumentator().instrument(app).expose(
         app, endpoint="/metrics", include_in_schema=False
     )
+
+    # Proxy all other paths to Mercado Libre
+    app.include_router(proxy_router, prefix="")
 
     return app
 

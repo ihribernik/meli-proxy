@@ -1,9 +1,11 @@
 # Architecture Meli-Proxy
 
 ## Resumen
+
 Proxy HTTP de alto rendimiento (FastAPI) hacia `https://api.mercadolibre.com`, con limitación de tasa distribuida en Redis (single o Cluster), métricas Prometheus y balanceo con Traefik.
 
 ## Diagrama (alto nivel)
+
 ```mermaid
 flowchart LR
     C[Cliente] -->|HTTP| T[Traefik]
@@ -28,6 +30,7 @@ flowchart LR
 ```
 
 ## Flujo de Request
+
 1. Traefik recibe el request y balancea a una réplica de la API.
 2. Middleware de Rate Limit consulta/incrementa contadores en Redis por ventana de 60s (IP, Path, IP+Path).
 3. Si excede límite → 429 con headers `Retry-After`, `X-RateLimit-*`.
@@ -36,6 +39,7 @@ flowchart LR
 6. Métricas: `/metrics` expone Prometheus (latencias/requests), y contadores de rate-limit (allowed/blocked).
 
 ## Componentes
+
 - FastAPI App: `app/fast_api.py`
   - CORS, middleware de rate limit, rutas `/health`, `/metrics`, y proxy catch‑all.
 - Proxy: `app/presentation/proxy.py`
@@ -50,6 +54,7 @@ flowchart LR
 - Balanceo: Traefik (compose) con labels en `api`.
 
 ## Variables relevantes
+
 - `MELI_API_URL` (default: `https://api.mercadolibre.com`)
 - Redis single: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
 - Redis cluster: `REDIS_CLUSTER_NODES` (lista host:port)
@@ -57,5 +62,6 @@ flowchart LR
 - Rate limit JSON: `RATE_LIMIT_RULES_IP_JSON`, `RATE_LIMIT_RULES_PATH_JSON`, `RATE_LIMIT_RULES_IP_PATH_JSON`
 
 ## Perfiles/Despliegue
+
 - Compose perfiles: `single` y `cluster` (ver README)
 - Escalado: `--scale api=3` (Traefik balancea), o K8s con Deployment + Service + HPA.

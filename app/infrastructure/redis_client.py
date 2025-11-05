@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import random
-from typing import Sequence
+from typing import Awaitable, Sequence
+from redis.asyncio.cluster import ClusterNode
 
 import redis.asyncio as redis
 
@@ -35,7 +36,13 @@ async def _wait_ready(
     attempt = 0
     while True:
         try:
-            ok = await client.ping()
+            ping_result: bool | Awaitable[bool] = client.ping()
+            ok = (
+                await ping_result
+                if isinstance(ping_result, Awaitable)
+                else bool(ping_result)
+            )
+
             if ok:
                 return
         except Exception:
@@ -58,7 +65,7 @@ async def get_redis() -> redis.Redis | redis.RedisCluster:
     if settings.REDIS_CLUSTER_NODES:
         startup_nodes = _parse_cluster_nodes(settings.REDIS_CLUSTER_NODES)
         _redis_client = redis.RedisCluster(
-            startup_nodes=[{"host": h, "port": p} for h, p in startup_nodes],
+            startup_nodes=[ClusterNode(h, p) for h, p in startup_nodes],
             password=settings.REDIS_PASSWORD,
             decode_responses=False,
             read_from_replicas=True,

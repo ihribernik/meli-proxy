@@ -1,0 +1,13 @@
+-r requirements.txt
+black>=25.1.0
+flake8>=7.3.0
+isort>=6.0.1
+mypy>=1.17.1
+pylint>=3.3.8
+pytest==8.4.1
+pytest-cov>=7.0.0
+setuptools>=80.9.0
+types-passlib>=1.7.7.20250602
+types-python-jose>=3.5.0.20250531
+wheel>=0.45.1
+

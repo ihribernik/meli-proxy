@@ -1,11 +1,13 @@
 FROM python:3.12-slim-trixie
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /code/app
 
+# Install only runtime dependencies first to leverage Docker cache
+COPY requirements.txt /code/app/
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the rest of the source
 COPY . /code/app/
 
-RUN uv sync
-
-CMD ["uv", "run", "uvicorn", "app.fast_api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.fast_api:app", "--host", "0.0.0.0", "--port", "8000"]
 
