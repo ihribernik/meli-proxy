@@ -257,14 +257,27 @@ class RedisRateLimiter:
         return True, rules[most_specific_idx], remaining, reset_in
 
 
-_limiter: Optional[RedisRateLimiter] = None
+class _RateLimiterSingleton:
+    _instance: Optional[RedisRateLimiter] = None
+
+    @classmethod
+    def get_instance(cls) -> RedisRateLimiter:
+        if cls._instance is None:
+            cls._instance = RedisRateLimiter(Settings())
+        return cls._instance
+
+    @classmethod
+    def set_instance(cls, limiter: Optional[RedisRateLimiter]) -> None:
+        cls._instance = limiter
 
 
 def get_rate_limiter() -> RedisRateLimiter:
-    global _limiter
-    if _limiter is None:
-        _limiter = RedisRateLimiter(Settings())
-    return _limiter
+    return _RateLimiterSingleton.get_instance()
+
+
+def _set_rate_limiter(limiter: Optional[RedisRateLimiter]) -> None:
+    """Visible for tests to override or reset the shared limiter."""
+    _RateLimiterSingleton.set_instance(limiter)
 
 
 async def rate_limit_middleware(request: Request, call_next: Callable) -> Response:

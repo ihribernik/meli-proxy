@@ -3,13 +3,11 @@ from __future__ import annotations
 import asyncio
 import random
 from typing import Awaitable, Sequence
-from redis.asyncio.cluster import ClusterNode
 
 import redis.asyncio as redis
+from redis.asyncio.cluster import ClusterNode
 
 from app.core.config import Settings
-
-_redis_client: redis.Redis | redis.RedisCluster | None = None
 
 
 def _parse_cluster_nodes(nodes: str) -> Sequence[tuple[str, int]]:
@@ -56,31 +54,49 @@ async def _wait_ready(
         await asyncio.sleep(max(0.1, sleep + jitter))
 
 
+class _RedisClientSingleton:
+    _client: redis.Redis | redis.RedisCluster | None = None
+    _lock: asyncio.Lock | None = None
+
+    @classmethod
+    async def _create_client(cls) -> redis.Redis | redis.RedisCluster:
+        settings = Settings()
+        if settings.REDIS_CLUSTER_NODES:
+            startup_nodes = _parse_cluster_nodes(settings.REDIS_CLUSTER_NODES)
+            client: redis.Redis | redis.RedisCluster = redis.RedisCluster(
+                startup_nodes=[ClusterNode(h, p) for h, p in startup_nodes],
+                password=settings.REDIS_PASSWORD,
+                decode_responses=False,
+                read_from_replicas=True,
+            )
+        else:
+            client = redis.Redis(
+                host=settings.REDIS_HOST,
+                port=settings.REDIS_PORT,
+                password=settings.REDIS_PASSWORD,
+                db=settings.REDIS_DB,
+                decode_responses=False,
+            )
+
+        await _wait_ready(
+            client, settings.REDIS_INIT_RETRIES, settings.REDIS_INIT_BACKOFF
+        )
+        return client
+
+    @classmethod
+    async def get_client(cls) -> redis.Redis | redis.RedisCluster:
+        if cls._client is not None:
+            return cls._client
+
+        if cls._lock is None:
+            cls._lock = asyncio.Lock()
+
+        async with cls._lock:
+            if cls._client is not None:
+                return cls._client
+            cls._client = await cls._create_client()
+            return cls._client
+
+
 async def get_redis() -> redis.Redis | redis.RedisCluster:
-    global _redis_client
-    if _redis_client is not None:
-        return _redis_client
-
-    settings = Settings()
-    if settings.REDIS_CLUSTER_NODES:
-        startup_nodes = _parse_cluster_nodes(settings.REDIS_CLUSTER_NODES)
-        _redis_client = redis.RedisCluster(
-            startup_nodes=[ClusterNode(h, p) for h, p in startup_nodes],
-            password=settings.REDIS_PASSWORD,
-            decode_responses=False,
-            read_from_replicas=True,
-            # skip_full_coverage_check=True,
-        )
-    else:
-        _redis_client = redis.Redis(
-            host=settings.REDIS_HOST,
-            port=settings.REDIS_PORT,
-            password=settings.REDIS_PASSWORD,
-            db=settings.REDIS_DB,
-            decode_responses=False,
-        )
-
-    await _wait_ready(
-        _redis_client, settings.REDIS_INIT_RETRIES, settings.REDIS_INIT_BACKOFF
-    )
-    return _redis_client
+    return await _RedisClientSingleton.get_client()

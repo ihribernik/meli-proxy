@@ -79,7 +79,7 @@ class RateLimitAdminRoutesTest(unittest.TestCase):
             return self.redis
 
         # Ensure the limiter uses our fake Redis and does not retain previous state.
-        rl._limiter = None  # type: ignore[attr-defined]
+        rl._set_rate_limiter(None)
         self.monkeypatch.setattr(rl, "get_redis", fake_get_redis, raising=True)
 
         limiter = rl.RedisRateLimiter(rl.Settings())  # type: ignore[attr-defined]
@@ -90,6 +90,7 @@ class RateLimitAdminRoutesTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.client.close()
+        rl._set_rate_limiter(None)
         self.monkeypatch.undo()
 
     def test_get_returns_defaults(self) -> None:
@@ -144,6 +145,15 @@ class RateLimitAdminRoutesTest(unittest.TestCase):
         # Defaults should remain for untouched sections.
         assert data["path"]["/categories/"] == 10000
 
+    def test_patch_requires_at_least_one_section(self) -> None:
+        resp = self.client.patch(
+            "/admin/rate-limits", json={}, headers=self.headers
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == (
+            "At least one of 'ip', 'path' or 'ip_path' must be provided."
+        )
+
     def test_reset_restores_defaults(self) -> None:
         self.client.put(
             "/admin/rate-limits",
@@ -173,3 +183,25 @@ class RateLimitAdminRoutesTest(unittest.TestCase):
             "/admin/rate-limits", headers={"X-Admin-Token": "invalid"}
         )
         assert resp.status_code == 401
+
+
+class RateLimitAdminAuthDisabledTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.monkeypatch = MonkeyPatch()
+        self.monkeypatch.delenv("ADMIN_API_TOKENS", raising=False)
+        from app.presentation.api.middlewares import rate_limit as rl
+
+        rl._set_rate_limiter(None)
+        self.client = TestClient(fast_api.app)
+
+    def tearDown(self) -> None:
+        self.client.close()
+        from app.presentation.api.middlewares import rate_limit as rl
+
+        rl._set_rate_limiter(None)
+        self.monkeypatch.undo()
+
+    def test_admin_routes_disabled_without_tokens(self) -> None:
+        resp = self.client.get("/admin/rate-limits")
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "Admin API disabled."

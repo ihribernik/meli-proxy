@@ -19,14 +19,12 @@ class Settings(BaseSettings):
     PORT: int = 8080
     DEBUG: bool = False
 
-    # Upstream (Mercado Libre API)
     MELI_API_URL: str = "https://api.mercadolibre.com"
 
     @property
     def PROXY_UPSTREAM_BASE(self) -> str:
         return self.MELI_API_URL
 
-    # CORS
     CORS_ORIGINS: List[str] = ["*"]
 
     # Redis / Redis Cluster
@@ -34,26 +32,20 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str | None = None
     REDIS_DB: int = 0
-    # Comma-separated list of host:port for cluster; when set, cluster mode is used
     REDIS_CLUSTER_NODES: str | None = None
 
-    # Redis init backoff
     REDIS_INIT_RETRIES: int = 30
     REDIS_INIT_BACKOFF: float = 0.5
 
-    # Rate limiting defaults (per minute)
-    RATE_LIMIT_DEFAULT: int = 0  # 0 = unlimited if no rule matches
+    RATE_LIMIT_DEFAULT: int = 0
     RATE_LIMIT_CACHE_SECONDS: float = 5.0
 
-    # Rules configured via JSON envs for flexibility
     RATE_LIMIT_RULES_IP_JSON: str | None = None
     RATE_LIMIT_RULES_PATH_JSON: str | None = None
     RATE_LIMIT_RULES_IP_PATH_JSON: str | None = None
 
-    # Admin API
     ADMIN_API_TOKENS: str | None = None
 
-    # Sensible defaults matching the challenge examples
     @property
     def RATE_LIMIT_RULES_IP(self) -> Dict[str, int]:
         if self.RATE_LIMIT_RULES_IP_JSON:

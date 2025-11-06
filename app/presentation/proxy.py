@@ -34,22 +34,49 @@ def _filter_headers(headers: Iterable[tuple[str, str]]) -> Dict[str, str]:
     return filtered
 
 
-_client: httpx.AsyncClient | None = None
+def _compose_forwarded_for(existing_chain: str, client_ip: str) -> str | None:
+    if not client_ip:
+        return None
+
+    chain_parts = [
+        part.strip()
+        for part in existing_chain.split(",")
+        if part and part.strip()
+    ]
+    if not chain_parts or chain_parts[-1] != client_ip:
+        chain_parts.append(client_ip)
+
+    if not chain_parts:
+        return None
+
+    return ", ".join(chain_parts)
+
+
+class _ProxyAsyncClientSingleton:
+    _client: httpx.AsyncClient | None = None
+
+    @classmethod
+    def get_client(cls) -> httpx.AsyncClient:
+        if cls._client is None:
+            cls._client = httpx.AsyncClient(
+                follow_redirects=False,
+                timeout=httpx.Timeout(10.0, connect=2.0),
+                limits=httpx.Limits(
+                    max_connections=2000,
+                    max_keepalive_connections=2000,
+                    keepalive_expiry=30.0,
+                ),
+            )
+        return cls._client
+
+    @classmethod
+    def set_client(cls, client: httpx.AsyncClient | None) -> None:
+        """Visible for tests to replace or clear the singleton instance."""
+        cls._client = client
 
 
 def _get_client() -> httpx.AsyncClient:
-    global _client
-    if _client is None:
-        _client = httpx.AsyncClient(
-            follow_redirects=False,
-            timeout=httpx.Timeout(10.0, connect=2.0),
-            limits=httpx.Limits(
-                max_connections=2000,
-                max_keepalive_connections=2000,
-                keepalive_expiry=30.0,
-            ),
-        )
-    return _client
+    return _ProxyAsyncClientSingleton.get_client()
 
 
 @router.api_route(
@@ -64,23 +91,16 @@ async def proxy_all(full_path: str, request: Request) -> Response:
 
     method = request.method
     headers = _filter_headers(request.headers.items())
-    client_ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+    existing_forwarded_for = request.headers.get("x-forwarded-for", "")
+    client_ip = existing_forwarded_for.split(",")[0].strip() or (
         request.client.host if request.client else ""
     )
-    if client_ip:
-        existing_chain = request.headers.get("x-forwarded-for", "")
-        chain_parts = [
-            part.strip()
-            for part in existing_chain.split(",")
-            if part and part.strip()
-        ]
-        if not chain_parts or chain_parts[-1] != client_ip:
-            chain_parts.append(client_ip)
-        if chain_parts:
-            for key in list(headers.keys()):
-                if key.lower() == "x-forwarded-for":
-                    headers.pop(key)
-            headers["X-Forwarded-For"] = ", ".join(chain_parts)
+    forwarded_for = _compose_forwarded_for(existing_forwarded_for, client_ip)
+    if forwarded_for is not None:
+        for key in list(headers.keys()):
+            if key.lower() == "x-forwarded-for":
+                headers.pop(key)
+        headers["X-Forwarded-For"] = forwarded_for
 
     if request.headers.get("host") and not any(
         key.lower() == "x-forwarded-host" for key in headers
