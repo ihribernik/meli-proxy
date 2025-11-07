@@ -1,0 +1,25 @@
+config:
+  target: "http://127.0.0.1:8080"
+
+  phases:
+    - name: ramp-to-limit
+      duration: 60
+      arrivalRate: 1000
+      rampTo: 3000   # si tu PC soporta más, podés subirlo a 4000
+
+    - name: sustain-limit
+      duration: 60
+      arrivalRate: 3000
+
+  defaults:
+    headers:
+      accept: application/json
+
+  ensure:
+    maxVusers: 3500
+
+scenarios:
+  - name: health-check
+    flow:
+      - get:
+          url: "/health"

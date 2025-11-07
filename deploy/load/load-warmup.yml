@@ -1,0 +1,19 @@
+config:
+  target: "http://127.0.0.1:8080"
+  phases:
+    - name: warm-up
+      duration: 30
+      arrivalRate: 50
+    - name: light-sustain
+      duration: 30
+      arrivalRate: 100
+
+  defaults:
+    headers:
+      accept: application/json
+
+scenarios:
+  - name: health-check
+    flow:
+      - get:
+          url: "/health"

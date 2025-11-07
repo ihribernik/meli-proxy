@@ -1,0 +1,20 @@
+config:
+  target: "http://127.0.0.1:8080"
+  phases:
+    - name: ramp-to-2k
+      duration: 60
+      arrivalRate: 500
+      rampTo: 2000
+    - name: sustain-2k
+      duration: 60
+      arrivalRate: 2000
+
+  defaults:
+    headers:
+      accept: application/json
+
+scenarios:
+  - name: health-check
+    flow:
+      - get:
+          url: "/health"
