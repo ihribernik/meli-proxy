@@ -39,9 +39,7 @@ def _compose_forwarded_for(existing_chain: str, client_ip: str) -> str | None:
         return None
 
     chain_parts = [
-        part.strip()
-        for part in existing_chain.split(",")
-        if part and part.strip()
+        part.strip() for part in existing_chain.split(",") if part and part.strip()
     ]
     if not chain_parts or chain_parts[-1] != client_ip:
         chain_parts.append(client_ip)

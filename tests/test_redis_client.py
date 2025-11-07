@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch, call
+from unittest.mock import call, patch
 
 from app.infrastructure import redis_client
 
@@ -61,7 +61,8 @@ class RedisClientSingletonTest(unittest.IsolatedAsyncioTestCase):
         )
 
         with patch.object(redis_client, "Settings", return_value=fake_settings), patch(
-            "app.infrastructure.redis_client.redis.RedisCluster", return_value=fake_client
+            "app.infrastructure.redis_client.redis.RedisCluster",
+            return_value=fake_client,
         ) as cluster_ctor, patch(
             "app.infrastructure.redis_client.ClusterNode"
         ) as cluster_node:

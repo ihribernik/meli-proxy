@@ -146,9 +146,7 @@ class RateLimitAdminRoutesTest(unittest.TestCase):
         assert data["path"]["/categories/"] == 10000
 
     def test_patch_requires_at_least_one_section(self) -> None:
-        resp = self.client.patch(
-            "/admin/rate-limits", json={}, headers=self.headers
-        )
+        resp = self.client.patch("/admin/rate-limits", json={}, headers=self.headers)
         assert resp.status_code == 400
         assert resp.json()["detail"] == (
             "At least one of 'ip', 'path' or 'ip_path' must be provided."
@@ -164,9 +162,7 @@ class RateLimitAdminRoutesTest(unittest.TestCase):
             },
             headers=self.headers,
         )
-        resp_reset = self.client.post(
-            "/admin/rate-limits/reset", headers=self.headers
-        )
+        resp_reset = self.client.post("/admin/rate-limits/reset", headers=self.headers)
         assert resp_reset.status_code == 200
         defaults = resp_reset.json()
         assert defaults["ip"]["152.152.152.152"] == 1000

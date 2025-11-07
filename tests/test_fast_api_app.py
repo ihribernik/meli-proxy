@@ -12,9 +12,9 @@ class FastAPICreationTest(unittest.TestCase):
         instrumentator = MagicMock()
         instrumentator.instrument.return_value = instrumentator
 
-        with patch.object(fast_api, "Instrumentator", return_value=instrumentator), patch.object(
-            fast_api, "Settings"
-        ) as settings_cls:
+        with patch.object(
+            fast_api, "Instrumentator", return_value=instrumentator
+        ), patch.object(fast_api, "Settings") as settings_cls:
             settings_cls.return_value = SimpleNamespace(
                 API_TITLE="Test API",
                 API_VERSION="0.0.1",

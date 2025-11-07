@@ -14,7 +14,6 @@ from app.presentation.schemas import (
     RateLimitRulesPatch,
 )
 
-
 router = APIRouter(
     prefix="/admin/rate-limits",
     tags=["Rate Limits"],
