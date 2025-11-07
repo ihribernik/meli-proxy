@@ -105,6 +105,42 @@ Servicios incluidos:
 - `grafana`: se provisiona con dashboards/DS en `deploy/grafana/provisioning`.
 - `traefik`: reverse proxy opcional que abre el puerto 80 y enruta al servicio `api` usando labels Docker.
 
+### Diagrama (perfil `single`)
+
+```text
+                 ┌──────────────────────┐              ┌──────────────────┐
+Clientes ─HTTP──►│ Traefik (80/web)     │──────────────►│ FastAPI `api`    │──► Mercado Libre API
+                 └──────────────────────┘              │  + /metrics       │
+                                                      └────────┬──────────┘
+                                                               │
+                                    redis-ready (wait-for) ────┘
+                                                               │
+                                                         ┌─────▼─────┐
+                                                         │ Redis     │ (perfil `single`)
+                                                         └─────┬─────┘
+                                                               │
+ ┌──────────────────────┐        scrape /metrics         ┌──────▼───────┐      dashboards      ┌────────────┐
+ │ Prometheus (9090)    │◄──────────────────────────────►│ FastAPI `api`│◄────────────────────►│ Grafana    │
+ └──────────────────────┘                                 └─────────────┘                      └────────────┘
+```
+
+### Diagrama (perfil `cluster`)
+
+```text
+Clientes ─HTTP──► Traefik ─► FastAPI `api` ─► Mercado Libre API
+                         │
+                         │ redis-ready
+                         ▼
+                 ┌─────────────────────────────┐
+                 │ Redis Cluster (6 nodos)     │
+                 │ 7000-7005 + plantilla local │
+                 └────────────┬────────────────┘
+                              │
+                              ├────► Redis Exporter (9121) ─► Prometheus ─► Grafana
+                              │
+                              └────► Pub/Sub + rate-limit state consumido por las réplicas FastAPI
+```
+
 ```bash
 # Redis single node
 docker compose --profile single up --build -d
