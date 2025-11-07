@@ -9,7 +9,6 @@ from app.presentation.api.middlewares.rate_limit import (
     get_rate_limiter,
 )
 from app.presentation.schemas import (
-    RateLimitIPPathRule,
     RateLimitRules,
     RateLimitRulesPatch,
 )
