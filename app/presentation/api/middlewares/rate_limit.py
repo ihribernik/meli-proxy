@@ -86,6 +86,52 @@ class RedisRateLimiter:
                 normalized.append({"ip": ip, "path_prefix": prefix, "limit": limit})
         return normalized
 
+    @staticmethod
+    def _decode_json(raw: Optional[bytes]) -> Optional[Any]:
+        if not raw:
+            return None
+        try:
+            return json.loads(raw.decode())
+        except Exception:
+            return None
+
+    @staticmethod
+    def _parse_float(raw: Optional[bytes]) -> Optional[float]:
+        if not raw:
+            return None
+        try:
+            return float(raw.decode())
+        except Exception:
+            return None
+
+    def _extract_dict_rules(
+        self,
+        raw: Optional[bytes],
+        normalizer: Callable[[Dict[str, Any]], Dict[str, int]],
+        default: Dict[str, int],
+    ) -> Dict[str, int]:
+        parsed = self._decode_json(raw)
+        if isinstance(parsed, dict):
+            try:
+                return normalizer(parsed)
+            except Exception:
+                return default
+        return default
+
+    def _extract_list_rules(
+        self,
+        raw: Optional[bytes],
+        normalizer: Callable[[List[Dict[str, Any]]], List[Dict[str, Any]]],
+        default: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        parsed = self._decode_json(raw)
+        if isinstance(parsed, list):
+            try:
+                return normalizer(parsed)
+            except Exception:
+                return default
+        return default
+
     async def _ensure_rules(self) -> None:
         now = time.time()
         if now - self._last_refresh < self._cache_ttl:
@@ -98,42 +144,19 @@ class RedisRateLimiter:
         pipe.get(self._RULES_UPDATED_AT)
         raw_ip, raw_path, raw_ip_path, raw_updated_at = await pipe.execute()
 
-        defaults_ip = self.settings.RATE_LIMIT_RULES_IP
-        defaults_path = self.settings.RATE_LIMIT_RULES_PATH
-        defaults_ip_path = self.settings.RATE_LIMIT_RULES_IP_PATH
+        self.rules_ip = self._extract_dict_rules(
+            raw_ip, self._normalize_ip_rules, self.settings.RATE_LIMIT_RULES_IP
+        )
+        self.rules_path = self._extract_dict_rules(
+            raw_path, self._normalize_path_rules, self.settings.RATE_LIMIT_RULES_PATH
+        )
+        self.rules_ip_path = self._extract_list_rules(
+            raw_ip_path,
+            self._normalize_ip_path_rules,
+            self.settings.RATE_LIMIT_RULES_IP_PATH,
+        )
 
-        ip_rules = defaults_ip
-        path_rules = defaults_path
-        ip_path_rules = defaults_ip_path
-
-        if raw_ip:
-            try:
-                ip_rules = self._normalize_ip_rules(json.loads(raw_ip.decode()))
-            except Exception:
-                ip_rules = defaults_ip
-        if raw_path:
-            try:
-                path_rules = self._normalize_path_rules(json.loads(raw_path.decode()))
-            except Exception:
-                path_rules = defaults_path
-        if raw_ip_path:
-            try:
-                parsed = json.loads(raw_ip_path.decode())
-                if isinstance(parsed, list):
-                    ip_path_rules = self._normalize_ip_path_rules(parsed)
-            except Exception:
-                ip_path_rules = defaults_ip_path
-
-        self.rules_ip = ip_rules
-        self.rules_path = path_rules
-        self.rules_ip_path = ip_path_rules
-        updated_at: float | None = None
-        if raw_updated_at:
-            try:
-                updated_at = float(raw_updated_at.decode())
-            except Exception:
-                updated_at = None
-        self._updated_at = updated_at
+        self._updated_at = self._parse_float(raw_updated_at)
         self._last_refresh = now
 
     async def set_rules(
