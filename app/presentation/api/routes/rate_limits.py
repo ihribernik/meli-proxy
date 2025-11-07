@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.config import Settings
 from app.presentation.api.dependencies import require_admin_token
-from app.presentation.api.middlewares.rate_limit import get_rate_limiter
+from app.presentation.api.middlewares.rate_limit import (
+    RedisRateLimiter,
+    get_rate_limiter,
+)
 from app.presentation.schemas import (
     RateLimitIPPathRule,
     RateLimitRules,
@@ -20,15 +23,18 @@ router = APIRouter(
 
 
 @router.get("", response_model=RateLimitRules)
-async def get_rate_limit_rules() -> RateLimitRules:
-    limiter = get_rate_limiter()
+async def get_rate_limit_rules(
+    limiter: RedisRateLimiter = Depends(get_rate_limiter),
+) -> RateLimitRules:
     rules = await limiter.get_rules()
     return RateLimitRules.model_validate(rules)
 
 
 @router.put("", response_model=RateLimitRules, status_code=status.HTTP_200_OK)
-async def replace_rate_limit_rules(payload: RateLimitRules) -> RateLimitRules:
-    limiter = get_rate_limiter()
+async def replace_rate_limit_rules(
+    payload: RateLimitRules,
+    limiter: RedisRateLimiter = Depends(get_rate_limiter),
+) -> RateLimitRules:
     await limiter.set_rules(
         ip_rules=dict(payload.ip),
         path_rules=dict(payload.path),
@@ -39,8 +45,10 @@ async def replace_rate_limit_rules(payload: RateLimitRules) -> RateLimitRules:
 
 
 @router.patch("", response_model=RateLimitRules, status_code=status.HTTP_200_OK)
-async def patch_rate_limit_rules(payload: RateLimitRulesPatch) -> RateLimitRules:
-    limiter = get_rate_limiter()
+async def patch_rate_limit_rules(
+    payload: RateLimitRulesPatch,
+    limiter: RedisRateLimiter = Depends(get_rate_limiter),
+) -> RateLimitRules:
     current = await limiter.get_rules()
 
     if payload.ip is None and payload.path is None and payload.ip_path is None:
@@ -73,7 +81,9 @@ async def patch_rate_limit_rules(payload: RateLimitRulesPatch) -> RateLimitRules
     response_model=RateLimitRules,
     status_code=status.HTTP_200_OK,
 )
-async def reset_rate_limit_rules() -> RateLimitRules:
+async def reset_rate_limit_rules(
+    limiter: RedisRateLimiter = Depends(get_rate_limiter),
+) -> RateLimitRules:
     settings = Settings()
     defaults = RateLimitRules(
         ip=settings.RATE_LIMIT_RULES_IP,
@@ -81,7 +91,6 @@ async def reset_rate_limit_rules() -> RateLimitRules:
         ip_path=settings.RATE_LIMIT_RULES_IP_PATH,
     )
 
-    limiter = get_rate_limiter()
     await limiter.set_rules(
         ip_rules=dict(defaults.ip),
         path_rules=dict(defaults.path),
