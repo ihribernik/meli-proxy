@@ -96,10 +96,14 @@ tox -e py311
 
 Servicios incluidos:
 
-- `api`: FastAPI + /metrics
-- `redis`: Redis 7 single node
-- `prometheus`: scrape `/metrics` de `api`
-- `grafana`: datasource Prometheus + dashboard básico
+- `api`: FastAPI + `/metrics`, expuesta en el puerto 8000 interno.
+- `redis-ready`: contenedor efímero que bloquea el arranque de `api` hasta que Redis responda `PING` (permite retrasos o contraseñas).
+- `redis`: Redis 7 single node (perfil `single`).
+- `redis-cluster`: clúster de 6 nodos basado en `grokzen/redis-cluster` (perfil `cluster`) con plantillas en `deploy/redis-cluster`.
+- `redis-exporter`: expone métricas de Redis Cluster en `:9121` para Prometheus (perfil `cluster`).
+- `prometheus`: scrapea `/metrics` de `api` usando `deploy/prometheus/prometheus.yml`.
+- `grafana`: se provisiona con dashboards/DS en `deploy/grafana/provisioning`.
+- `traefik`: reverse proxy opcional que abre el puerto 80 y enruta al servicio `api` usando labels Docker.
 
 ```bash
 # Redis single node
