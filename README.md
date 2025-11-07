@@ -11,6 +11,28 @@ Proxy de alto rendimiento para la API de Mercado Libre, con rate limit distribui
 - Docker Compose con Redis, Prometheus y Grafana
 - Escalable horizontalmente (replicas)
 
+## Arquitectura (visión rápida)
+
+```text
+                                    Prometheus ──► Grafana
+                                          ▲
+                                          │ scrape /metrics
+Clientes ──HTTP──► FastAPI (`app.fast_api`) ──┬───────────────────────┐
+                    │ routers presentation/*  │                       │
+                    │ inyectan settings/redis │                       │
+                    ▼                         │                       │
+        ┌───────────────────────────────┬─────▼────────────────────┐  │
+        │ Proxy Flow                    │ Admin API (/admin/rl)    │  │
+        │ • aplica rate limiting        │ • lee/escribe reglas     │  │
+        │ • proxea a Mercado Libre      │ • publica eventos Redis  │  │
+        └───────────────────────────────┴───────────┬──────────────┘  │
+                    │ async redis_client            │ canal `rl:*`    │
+                    ▼                               ▲                 │
+             Redis / Redis Cluster ◄────────────────┘                 │
+                    │                                                 │
+                    └─ cuotas + pub/sub sincronizadas ────────────────┘
+```
+
 ## Variables de entorno (.env)
 
 ```env
@@ -147,6 +169,21 @@ artillery run deploy/load/artillery-50k.yml
 
 - Artillery necesita Node.js (`npm install -g artillery`). Para llegar a 50k req/s, ejecute el generador en un host separado o use `artillery run --count 4` para lanzar varios workers.
 - Monitoree `/metrics` (Prometheus/Grafana) durante la prueba para confirmar throughput real y detectar throttling (`meli_proxy_rate_limit_*`).
+
+### Resultados recientes
+
+| Escenario (archivo)        | Éxitos | Errores principales                         | Latencia p95 |
+|---------------------------|--------|---------------------------------------------|--------------|
+| Warm-up (`results-warmup.json`) | 4 500  | 0                                           | ~3 ms        |
+| 500 rps (`result-500.json`)     | 15 517 | 32 k `EADDRINUSE` (agotamiento de sockets) | ~15 ms       |
+| 2k rps (`result-2k.json`)       | 20 496 | 166 k `EADDRINUSE`, 9 k `ECONNREFUSED`     | ~1.3 s       |
+| Límite (`result-limit.json`)    | 25 578 | 244 k `EADDRINUSE`, 30 k `ECONNREFUSED`, 497 `ETIMEDOUT` | ~9.8 s |
+
+- El warm-up confirma que la API responde estable cuando la generación de conexiones es moderada.
+- A partir de ~500 rps el generador agota puertos locales (`EADDRINUSE`) y la API comienza a rechazar conexiones, lo que explica la caída en la tasa de completados.
+- Al subir a 2 k rps y al límite, la mayoría de las solicitudes se pierden por falta de sockets y rechazos (`ECONNREFUSED`), y la latencia de las pocas respuestas exitosas se dispara hasta segundos porque el servidor queda saturado.
+- Para repetir la prueba, incremente los límites del SO (`ulimit -n`, rango de puertos efímeros) o distribuya los generadores, y habilite keep-alive/pooling en el proxy para reutilizar conexiones.
+- Todas las mediciones se hicieron con la app corriendo en perfil `single` dentro de Windows y con Artillery ejecutándose en la misma máquina; en escenarios distribuidos los cuellos de botella podrían cambiar.
 
 ## Perfiles de ejecución (Compose)
 
