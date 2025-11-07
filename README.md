@@ -138,6 +138,13 @@ TARGET_PATH=/health \
 artillery run deploy/load/artillery-50k.yml
 ```
 
+```powershell
+$env:TARGET_URL = "http://127.0.0.1:8000"
+$env:TARGET_PATH = "/health"
+
+artillery run deploy/load/artillery-50k.yml
+```
+
 - Artillery necesita Node.js (`npm install -g artillery`). Para llegar a 50k req/s, ejecute el generador en un host separado o use `artillery run --count 4` para lanzar varios workers.
 - Monitoree `/metrics` (Prometheus/Grafana) durante la prueba para confirmar throughput real y detectar throttling (`meli_proxy_rate_limit_*`).
 
