@@ -1,5 +1,7 @@
 {
-  "annotations": {"list": []},
+  "annotations": {
+    "list": []
+  },
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
@@ -8,40 +10,252 @@
       "type": "stat",
       "title": "Requests/s",
       "datasource": "Prometheus",
-      "targets": [{
-        "expr": "sum(rate(http_requests_total[1m]))",
-        "legendFormat": "req/s"
-      }],
-      "gridPos": {"h": 6, "w": 8, "x": 0, "y": 0}
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{instance=~\"$instance\"}[1m]))",
+          "legendFormat": "req/s",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      }
     },
     {
       "type": "stat",
-      "title": "Latency P95",
+      "title": "Latency P95 (s)",
       "datasource": "Prometheus",
-      "targets": [{
-        "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
-        "legendFormat": "p95"
-      }],
-      "gridPos": {"h": 6, "w": 8, "x": 8, "y": 0}
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{instance=~\"$instance\"}[5m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      }
     },
     {
       "type": "stat",
       "title": "Rate Limit Blocks/s",
       "datasource": "Prometheus",
-      "targets": [{
-        "expr": "sum(rate(meli_proxy_rate_limit_blocked_total[1m]))",
-        "legendFormat": "blocks/s"
-      }],
-      "gridPos": {"h": 6, "w": 8, "x": 16, "y": 0}
+      "targets": [
+        {
+          "expr": "sum(rate(meli_proxy_rate_limit_blocked_total{scope=~\"$scope\"}[1m]))",
+          "legendFormat": "blocks/s",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Rate Limit Allowed/s",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(meli_proxy_rate_limit_allowed_total{scope=~\"$scope\"}[1m]))",
+          "legendFormat": "allowed/s",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Request Rate by Status",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{instance=~\"$instance\"}[1m])) by (status_code)",
+          "legendFormat": "{{status_code}}",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 6
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latency Percentiles (s)",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{instance=~\"$instance\"}[1m])) by (le))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 6
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate Limit Allowed vs Blocked",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(meli_proxy_rate_limit_allowed_total{scope=~\"$scope\"}[1m])) by (scope)",
+          "legendFormat": "allow: {{scope}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(meli_proxy_rate_limit_blocked_total{scope=~\"$scope\"}[1m])) by (scope)",
+          "legendFormat": "block: {{scope}}",
+          "refId": "B"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Rate Limit Config Updates",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(meli_proxy_rate_limit_config_updates_total[5m])",
+          "legendFormat": "updates/s",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Redis Memory Usage",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "avg(redis_memory_used_bytes{job=\"redis-exporter\"})",
+          "legendFormat": "used bytes",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 22
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Redis Hit Ratio",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(redis_keyspace_hits_total{job=\"redis-exporter\"}[5m])) / (sum(rate(redis_keyspace_hits_total{job=\"redis-exporter\"}[5m])) + sum(rate(redis_keyspace_misses_total{job=\"redis-exporter\"}[5m])))",
+          "legendFormat": "hit ratio",
+          "refId": "A"
+        }
+      ],
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 22
+      }
     }
   ],
   "schemaVersion": 38,
   "style": "dark",
-  "tags": ["meli", "proxy"],
-  "templating": {"list": []},
-  "time": {"from": "now-6h", "to": "now"},
+  "tags": [
+    "meli",
+    "proxy"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "label": "API Instance",
+        "type": "query",
+        "datasource": "Prometheus",
+        "definition": "label_values(http_requests_total, instance)",
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      },
+      {
+        "name": "scope",
+        "label": "Rate Limit Scope",
+        "type": "query",
+        "datasource": "Prometheus",
+        "definition": "label_values(meli_proxy_rate_limit_allowed_total, scope)",
+        "refresh": 2,
+        "sort": 1,
+        "hide": 0,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timezone": "",
   "title": "Meli Proxy Overview",
   "uid": "meli-proxy-overview",
-  "version": 1
+  "version": 2
 }

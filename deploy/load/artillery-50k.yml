@@ -1,0 +1,33 @@
+config:
+  target: "{{ $processEnvironment.TARGET_URL || 'http://127.0.0.1:8000' }}"
+  phases:
+    - name: warm-up
+      duration: 30
+      arrivalRate: 500
+    - name: ramp-to-5k
+      duration: 60
+      arrivalRate: 1000
+      rampTo: 5000
+    - name: ramp-to-15k
+      duration: 60
+      arrivalRate: 5000
+      rampTo: 15000
+    - name: ramp-to-30k
+      duration: 60
+      arrivalRate: 15000
+      rampTo: 30000
+    - name: sustain-50k
+      duration: 120
+      arrivalRate: 50000
+  defaults:
+    headers:
+      accept: application/json
+  ensure:
+    maxVusers: 60000
+
+scenarios:
+  - name: health-check
+    flow:
+      - get:
+          url: "{{ $processEnvironment.TARGET_PATH || '/health' }}"
+          name: "Proxy health"

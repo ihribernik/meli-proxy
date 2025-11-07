@@ -1,26 +1,29 @@
+name: meli-proxy
+
 services:
   api:
     build:
       context: .
       dockerfile: Dockerfile
+    depends_on:
+      redis-ready:
+        condition: service_completed_successfully
     environment:
-      - HOST=0.0.0.0
-      - PORT=8000
-      - MELI_API_URL=${MELI_API_URL:-https://api.mercadolibre.com}
-      # Single node defaults
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
-      - REDIS_DB=${REDIS_DB:-0}
-      # Cluster (opcional): si se setea, la app usa cluster
-      - REDIS_CLUSTER_NODES=${REDIS_CLUSTER_NODES:-}
+      HOST: 0.0.0.0
+      PORT: 8000
+      MELI_API_URL: ${MELI_API_URL:-https://api.mercadolibre.com}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-0}
+      REDIS_CLUSTER_NODES: ${REDIS_CLUSTER_NODES:-}
     ports:
       - "${API_PORT:-8080}:8000"
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.meli.rule=PathPrefix(`/`)"
-      - "traefik.http.routers.meli.entrypoints=web"
-      - "traefik.http.services.meli.loadbalancer.server.port=8000"
+      traefik.enable: "true"
+      traefik.http.routers.meli.rule: PathPrefix(`/`)
+      traefik.http.routers.meli.entrypoints: web
+      traefik.http.services.meli.loadbalancer.server.port: 8000
     command: uvicorn app.fast_api:app --host 0.0.0.0 --port 8000
     healthcheck:
       test:
@@ -32,7 +35,44 @@ services:
       timeout: 3s
       retries: 10
 
-  # Redis single node (perfil: single)
+  redis-ready:
+    image: redis:7-alpine
+    command:
+      - sh
+      - -c
+      - >
+        set -eu;
+        HOST=$${REDIS_WAIT_HOST:-redis};
+        PORT=$${REDIS_WAIT_PORT:-6379};
+        PASSWORD=$${REDIS_WAIT_PASSWORD:-};
+        TIMEOUT=$${REDIS_WAIT_TIMEOUT:-120};
+        INTERVAL=$${REDIS_WAIT_INTERVAL:-2};
+        END_TIME=$$(( $$(date +%s) + $$TIMEOUT ));
+        echo "Waiting for Redis $$HOST:$$PORT (timeout $$TIMEOUT s)...";
+        while [ $$(date +%s) -lt $$END_TIME ]; do
+          if [ -n "$$PASSWORD" ]; then
+            if redis-cli -h "$$HOST" -p "$$PORT" -a "$$PASSWORD" ping >/dev/null 2>&1; then
+              echo "Redis is ready";
+              exit 0;
+            fi;
+          else
+            if redis-cli -h "$$HOST" -p "$$PORT" ping >/dev/null 2>&1; then
+              echo "Redis is ready";
+              exit 0;
+            fi;
+          fi;
+          sleep $$INTERVAL;
+        done;
+        echo "Timed out waiting for Redis $$HOST:$$PORT";
+        exit 1
+    environment:
+      REDIS_WAIT_HOST: ${REDIS_WAIT_HOST:-redis}
+      REDIS_WAIT_PORT: ${REDIS_WAIT_PORT:-6379}
+      REDIS_WAIT_PASSWORD: ${REDIS_WAIT_PASSWORD:-}
+      REDIS_WAIT_TIMEOUT: ${REDIS_WAIT_TIMEOUT:-120}
+      REDIS_WAIT_INTERVAL: ${REDIS_WAIT_INTERVAL:-2}
+    restart: "no"
+
   redis:
     image: redis:7-alpine
     profiles: ["single"]
@@ -45,30 +85,29 @@ services:
       timeout: 3s
       retries: 10
 
-  # Redis Cluster (perfil: cluster)
   redis-cluster:
-    image: bitnami/redis-cluster:7.2
+    image: ${REDIS_CLUSTER_IMAGE:-grokzen/redis-cluster:latest}
     profiles: ["cluster"]
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
-      - REDIS_CLUSTER_REPLICAS=1
-      - REDIS_NODES=6
     ports:
       - "7000-7005:7000-7005"
+    volumes:
+      - ./deploy/redis-cluster/redis-cluster.tmpl:/redis-conf/redis-cluster.tmpl:ro
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -p 7000 ping | grep PONG"]
       interval: 10s
       timeout: 5s
       retries: 20
 
-  # Exporter de Redis para Prometheus (perfil: cluster)
   redis-exporter:
     image: oliver006/redis_exporter:v1.64.0
     profiles: ["cluster"]
     environment:
-      - REDIS_ADDR=redis://redis-cluster:7000
+      REDIS_ADDR: redis://redis-cluster:7000
     ports:
       - "9121:9121"
+    depends_on:
+      redis-cluster:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:latest
@@ -77,19 +116,29 @@ services:
     ports:
       - "9090:9090"
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:9090/-/ready || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget --spider -q http://127.0.0.1:9090/-/ready || exit 1",
+        ]
       interval: 5s
       timeout: 3s
       retries: 10
+    depends_on:
+      api:
+        condition: service_healthy
 
   grafana:
     image: grafana/grafana:latest
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      prometheus:
+        condition: service_healthy
 
   traefik:
     image: traefik:v3.1

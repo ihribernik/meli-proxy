@@ -80,10 +80,17 @@ Servicios incluidos:
 - `grafana`: datasource Prometheus + dashboard básico
 
 ```bash
-docker compose up --build -d
+# Redis single node
+docker compose --profile single up --build -d
+# Redis Cluster (carga vars desde deploy/compose/cluster.env)
+docker compose --env-file deploy/compose/cluster.env --profile cluster up --build -d
 # escalar replicas (Compose):
 docker compose up -d --scale api=3
 ```
+
+`deploy/compose/cluster.env` define los nodos por defecto del cluster; ajuste ese archivo si cambia puertos o topología.
+
+> Nota: la imagen de Redis Cluster es configurable con `REDIS_CLUSTER_IMAGE` (default `grokzen/redis-cluster:latest`). Si necesita fijar una versión puntual, defínala antes de ejecutar Compose (ej: `REDIS_CLUSTER_IMAGE=grokzen/redis-cluster:7.2.4 docker compose ...`).
 
 Prometheus: [localhost:9090](http://localhost:9090)
 Grafana: [localhost:3000](http://localhost:3000) (admin/admin)
@@ -119,13 +126,27 @@ Grafana: [localhost:3000](http://localhost:3000) (admin/admin)
 - Escale con `--scale api=N` y ponga un balanceador al frente.
 - Redis Cluster recomendado en producción para sharding y disponibilidad.
 
+## Pruebas de carga (Artillery)
+
+- El perfil `deploy/load/artillery-50k.yml` rampa hasta ~50k req/s contra `/health`; puede parametrizar el destino con `TARGET_URL` y `TARGET_PATH`.
+- Antes de ejecutar, levante la API (idealmente vía `docker compose up --build -d`) y aumente/relaje los límites en Redis usando la API de administración o variables `RATE_LIMIT_RULES_*`.
+- Ejecución local típica:
+
+```bash
+TARGET_URL=http://127.0.0.1:8000 \
+TARGET_PATH=/health \
+artillery run deploy/load/artillery-50k.yml
+```
+
+- Artillery necesita Node.js (`npm install -g artillery`). Para llegar a 50k req/s, ejecute el generador en un host separado o use `artillery run --count 4` para lanzar varios workers.
+- Monitoree `/metrics` (Prometheus/Grafana) durante la prueba para confirmar throughput real y detectar throttling (`meli_proxy_rate_limit_*`).
+
 ## Perfiles de ejecución (Compose)
 
 - Redis single node:
   - docker compose --profile single up --build -d
 - Redis Cluster (recomendado para escalado):
-  - export REDIS_CLUSTER_NODES=redis-cluster:7000,redis-cluster:7001,redis-cluster:7002,redis-cluster:7003,redis-cluster:7004,redis-cluster:7005
-  - docker compose --profile cluster up --build -d
+  - docker compose --env-file deploy/compose/cluster.env --profile cluster up --build -d
 
 Escalar réplicas de la API:
 
